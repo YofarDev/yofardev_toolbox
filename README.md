@@ -7,26 +7,38 @@ A modern, desktop automation application for batch file processing. Built with P
 
 ## Features
 
-- **Modern UI**: Clean, dark-themed interface built with CustomTkinter
-- **Script Library**: 14+ built-in image processing scripts including:
-  - Background removal (AI-powered)
-  - Image format conversion (GIF, WebP, etc.)
-  - Image enhancement (anime, manga, vibrance)
-  - Video to image extraction
-  - Webcam-style filters
-  - And more...
-- **LLM-Powered Script Generation**: Create custom scripts using natural language prompts via OpenAI-compatible APIs
-- **Real-time Console Output**: View script execution progress in real-time
-- **Batch Processing**: Process multiple files or entire folders at once
-- **Parameter Configuration**: Easy-to-use UI for configuring script parameters
+### 🤖 AI-Powered Script Generation (Core Feature)
+- **Natural Language to Code**: Simply describe what you want to automate in plain English
+- **Instant Scripts**: The AI writes complete, ready-to-use Python scripts in seconds
+- **OpenAI-Compatible**: Works with any LLM provider (OpenAI, Anthropic, local models via Ollama, etc.)
+- **No Coding Required**: Perfect for users who want automation without writing code
+
+### 📁 Batch File Processing
+- **Process Multiple Files**: Select individual files or entire folders at once
+- **Automatic Output Management**: Results saved to timestamped directories
+- **Auto-Open Results**: Output folder opens automatically when processing completes
+- **Real-Time Progress**: Watch your scripts run with live console output
+
+### 🎨 Built-in Script Library
+14+ pre-built scripts for common automation tasks:
+- **Image Processing**: Background removal, format conversion, resizing, filters
+- **Video Tools**: Extract frames, create GIFs, convert formats
+- **Enhancement**: AI-powered upscaling, color correction, artistic effects
+- **Utility**: Batch renaming, watermarking, metadata editing
+
+### 💻 Modern Interface
+- **Dark Theme**: Easy on the eyes during long work sessions
+- **Search & Filter**: Quickly find scripts by name or description
+- **Parameter UI**: Easy configuration without touching code
+- **Progress Tracking**: Real-time feedback on script execution
 
 ## Screenshots
 
 ![Yofardev Toolbox Screenshot](screen.png)
 
 The application features a two-panel layout:
-- **Left Panel**: Script browser with search functionality
-- **Right Panel**: Configuration area, file selection, and console output
+- **Left Panel**: Script browser with AI generator button
+- **Right Panel**: Configuration area, file selection, and live console output
 
 ## Installation
 
@@ -61,6 +73,23 @@ python main.py
 
 ## Usage
 
+### 🚀 Creating Custom Scripts with AI (Recommended)
+
+The easiest way to automate tasks is to let the AI write the script for you:
+
+1. Click the **"🤖 Generate Script"** button in the sidebar
+2. Click the **⚙️ settings button** to configure your LLM API (one-time setup)
+3. Enter your API details (endpoint, model, API key)
+4. Describe what you want to automate:
+   - ✅ "Resize all images to 1920x1080 and add a watermark"
+   - ✅ "Convert all PDFs to text files and extract emails"
+   - ✅ "Rename files by their creation date"
+   - ✅ "Apply a sepia filter and add timestamp to photos"
+5. Click **"Generate Script"** - the AI writes the code instantly
+6. Your new script appears in the sidebar and is ready to use!
+
+**No programming knowledge required** - just describe what you want in plain English.
+
 ### Running Scripts
 
 1. Select a script from the left sidebar
@@ -70,20 +99,11 @@ python main.py
 5. Output files are automatically saved to `~/Downloads/<script_name>/`
 6. The output folder opens automatically when the script completes
 
-### Generating Custom Scripts (AI-Powered)
-
-1. Click the "🤖 Generate Script" button in the sidebar
-2. Click the ⚙️ settings button to configure your LLM API
-3. Enter your API details (endpoint, model, API key)
-4. Describe the script you want to create
-5. Click "Generate Script" to create it
-6. The new script appears in the sidebar and is ready to use!
-
-**Supported LLM providers**: Any OpenAI-compatible API (OpenAI, Anthropic, local models via Ollama, etc.)
-
 ### Search Scripts
 
 Use the search box at the top of the sidebar to filter scripts by name or description.
+
+**💡 Pro Tip**: Can't find a script for your task? Click "🤖 Generate Script" and let the AI create one for you!
 
 ## Configuration
 
@@ -187,7 +207,7 @@ def process_files(file_paths, output_dir, **kwargs):
 import os
 from PIL import Image
 
-NAME = "Image Resizer"
+NAME = "Batch Image Resizer"
 DESCRIPTION = "Resize images to a specified dimension"
 INPUT_TYPES = "Images (*.png *.jpg *.jpeg)"
 PARAMETERS = [
@@ -206,6 +226,7 @@ PARAMETERS = [
 ]
 
 def main(files, output_dir, size, maintain_aspect, **kwargs):
+    """Process a list of image files."""
     for file_path in files:
         img = Image.open(file_path)
         if maintain_aspect:
@@ -215,31 +236,39 @@ def main(files, output_dir, size, maintain_aspect, **kwargs):
 
         output_path = os.path.join(output_dir, f"resized_{os.path.basename(file_path)}")
         img.save(output_path)
+        print(f"✅ Resized: {os.path.basename(file_path)}")
 
 def process_files(file_paths, output_dir, **kwargs):
+    """Entry point for batch processing."""
     main(file_paths, output_dir, **kwargs)
 ```
+
+**💡 Tip**: You can also use the AI generator to create this type of script automatically - just describe what you want!
 
 See `SCRIPT_DOCUMENTATION.md` for detailed guidelines.
 
 ## Available Scripts
 
-| Script | Description |
-|--------|-------------|
-| **Background Remover** | AI-powered background removal using rembg |
-| **Animated WebP Creator** | Create animated WebP images |
-| **Anime Enhancer** | Enhance anime-style images |
-| **Comparison GIF** | Create before/after comparison GIFs |
-| **Downscale by Half** | Reduce image size by 50% |
-| **Downscale to Size** | Resize to specific dimensions |
-| **GIF to WebP** | Convert GIF to WebP format |
-| **Images to GIF** | Combine images into GIF |
-| **JPEG Artifact Reducer** | Reduce compression artifacts |
-| **Manga Style Converter** | Apply manga-style effects |
-| **Rounded Corners** | Add rounded corners to images |
-| **Vibrance Saturation** | Enhance colors |
-| **Video to Images** | Extract frames from video |
-| **Webcamify** | Apply webcam-style filters |
+The app includes 14+ built-in scripts for common tasks. Remember, you can always create custom scripts with AI!
+
+| Script | Description | File Types |
+|--------|-------------|------------|
+| **Background Remover** | AI-powered background removal | Images |
+| **Animated WebP Creator** | Create animated WebP images | Images |
+| **Anime Enhancer** | Enhance anime-style images | Images |
+| **Comparison GIF** | Create before/after comparison GIFs | Images |
+| **Downscale by Half** | Reduce image size by 50% | Images |
+| **Downscale to Size** | Resize to specific dimensions | Images |
+| **GIF to WebP** | Convert GIF to WebP format | GIF |
+| **Images to GIF** | Combine images into GIF | Images |
+| **JPEG Artifact Reducer** | Reduce compression artifacts | Images |
+| **Manga Style Converter** | Apply manga-style effects | Images |
+| **Rounded Corners** | Add rounded corners to images | Images |
+| **Vibrance Saturation** | Enhance colors | Images |
+| **Video to Images** | Extract frames from video | Video |
+| **Webcamify** | Apply webcam-style filters | Images |
+
+**💡 Need something different?** Use the AI generator to create custom scripts for any file type or automation task!
 
 ## Troubleshooting
 

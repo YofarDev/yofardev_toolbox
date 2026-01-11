@@ -1,8 +1,9 @@
 """Script discovery, loading, and management."""
 import importlib.util
 import os
+import ast
 from pathlib import Path
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from config.app_config import SCRIPTS_DIR, SKIP_FILES
 
 
@@ -12,9 +13,82 @@ class ScriptManager:
     def __init__(self):
         self._scripts_cache: List[Dict] = []
 
+    def _extract_metadata_ast(self, script_path: str, filename: str) -> Optional[Dict]:
+        """
+        Extract script metadata using AST parsing (without importing).
+
+        This avoids ImportError when scripts have missing dependencies.
+
+        Args:
+            script_path: Path to the script file
+            filename: Name of the script file
+
+        Returns:
+            Script dict with metadata, or None if extraction fails
+        """
+        try:
+            with open(script_path, 'r', encoding='utf-8') as f:
+                code = f.read()
+
+            # Parse the code into AST
+            tree = ast.parse(code)
+
+            # Initialize with defaults
+            metadata = {
+                "name": filename[:-3],  # Use filename as default
+                "filename": filename[:-3],
+                "description": "No description available.",
+                "input_types": "",
+                "parameters": [],
+                "accepts_multiple_files": True,
+            }
+
+            # Walk the AST to find module-level variables
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target, ast.Name):
+                            var_name = target.id
+                            var_value = node.value
+
+                            # Extract string values
+                            if isinstance(var_value, ast.Constant):
+                                if var_name == "NAME" and isinstance(var_value.value, str):
+                                    metadata["name"] = var_value.value
+                                elif var_name == "DESCRIPTION" and isinstance(var_value.value, str):
+                                    metadata["description"] = var_value.value
+                                elif var_name == "INPUT_TYPES" and isinstance(var_value.value, str):
+                                    metadata["input_types"] = var_value.value
+
+                            # Extract PARAMETERS list
+                            elif var_name == "PARAMETERS" and isinstance(var_value, ast.List):
+                                # Try to evaluate the list safely
+                                try:
+                                    # Compile and evaluate just the list node
+                                    param_code = compile(ast.Expression(var_value), '<string>', 'eval')
+                                    metadata["parameters"] = eval(param_code, {"__builtins__": {}}, {})
+                                except:
+                                    metadata["parameters"] = []
+
+                            # Extract ACCEPTS_MULTIPLE_FILES boolean
+                            elif var_name == "ACCEPTS_MULTIPLE_FILES" and isinstance(var_value, ast.Constant):
+                                metadata["accepts_multiple_files"] = bool(var_value.value)
+
+            return metadata
+
+        except SyntaxError as e:
+            print(f"Error loading {filename}: Syntax error: {e}")
+            return None
+        except Exception as e:
+            print(f"Error loading {filename}: {e}")
+            return None
+
     def load_scripts(self) -> List[Dict]:
         """
         Discover and load all scripts from the scripts directory.
+
+        Uses AST parsing to extract metadata without importing modules,
+        which avoids ImportError when dependencies are missing.
 
         Returns:
             List of script dictionaries with metadata
@@ -30,22 +104,12 @@ class ScriptManager:
                 if (filename.endswith(".py")
                     and not filename.startswith("__")
                     and filename not in SKIP_FILES):
-                    try:
-                        script_path = os.path.join(SCRIPTS_DIR, filename)
-                        spec = importlib.util.spec_from_file_location(filename[:-3], script_path)
-                        module = importlib.util.module_from_spec(spec)
-                        spec.loader.exec_module(module)
+                    script_path = os.path.join(SCRIPTS_DIR, filename)
 
-                        scripts.append({
-                            "name": getattr(module, "NAME", filename[:-3]),
-                            "filename": filename[:-3],
-                            "description": getattr(module, "DESCRIPTION", "No description available."),
-                            "input_types": getattr(module, "INPUT_TYPES", ""),
-                            "parameters": getattr(module, "PARAMETERS", []),
-                            "accepts_multiple_files": getattr(module, "ACCEPTS_MULTIPLE_FILES", True),
-                        })
-                    except Exception as e:
-                        print(f"Error loading {filename}: {e}")
+                    # Use AST parsing to extract metadata (no import required)
+                    metadata = self._extract_metadata_ast(script_path, filename)
+                    if metadata:
+                        scripts.append(metadata)
 
         self._scripts_cache = scripts
         return scripts

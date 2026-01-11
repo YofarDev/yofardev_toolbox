@@ -4,7 +4,77 @@ import threading
 import os
 import sys
 import datetime
+import re
+import shutil
 from typing import List, Dict, Callable, Optional, Tuple
+
+
+def detect_missing_package(error_output: str) -> Optional[str]:
+    """
+    Detect if an error is due to a missing Python package and extract the package name.
+
+    Args:
+        error_output: The error output from script execution
+
+    Returns:
+        Package name if missing import detected, None otherwise
+    """
+    # Pattern for ModuleNotFoundError: No module named 'package_name'
+    module_pattern = r"ModuleNotFoundError.*?No module named ['\"]([^'\"]+)['\"]"
+    match = re.search(module_pattern, error_output)
+    if match:
+        return match.group(1)
+
+    # Pattern for ImportError: No module named 'package_name'
+    import_pattern = r"ImportError.*?No module named ['\"]([^'\"]+)['\"]"
+    match = re.search(import_pattern, error_output)
+    if match:
+        return match.group(1)
+
+    # Pattern for: cannot import name 'X' from partially initialized module 'Y' (most likely due to a circular import)
+    # Pattern for missing libraries in some packages
+    lib_pattern = r"library.*?([a-zA-Z0-9_-]+)\.so.*?not found"
+    match = re.search(lib_pattern, error_output)
+    if match:
+        # Try to map library name to package name
+        lib_name = match.group(1)
+        # Common mappings
+        mappings = {
+            'PIL': 'Pillow',
+            'cv2': 'opencv-python',
+            'cv2.cv2': 'opencv-python-headless',
+            'PIL._imaging': 'Pillow',
+            'yaml': 'PyYAML',
+            'bs4': 'beautifulsoup4',
+            'tkinter': 'python-tk',
+        }
+        return mappings.get(lib_name, lib_name)
+
+    return None
+
+
+def get_install_command(package_name: str) -> str:
+    """
+    Get the installation command for a package.
+
+    Args:
+        package_name: Name of the missing package
+
+    Returns:
+        Installation command string
+    """
+    # Map common package names to their pip/uv install names
+    mappings = {
+        'cv2': 'opencv-python',
+        'cv2.cv2': 'opencv-python-headless',
+        'PIL': 'Pillow',
+        'yaml': 'PyYAML',
+        'bs4': 'beautifulsoup4',
+        'fitz': 'pymupdf',  # PyMuPDF is installed as pymupdf, imported as fitz
+    }
+
+    install_name = mappings.get(package_name, package_name)
+    return f"uv add {install_name}"
 
 
 class ScriptExecutor:
@@ -12,16 +82,19 @@ class ScriptExecutor:
 
     def __init__(self,
                  output_callback: Callable[[str], None],
-                 finished_callback: Callable[[int, Optional[str]], None]):
+                 finished_callback: Callable[[int, Optional[str]], None],
+                 install_callback: Optional[Callable[[str, str], None]] = None):
         """
         Initialize the script executor.
 
         Args:
             output_callback: Function to call with each line of output
             finished_callback: Function to call when process finishes (returncode, output_dir)
+            install_callback: Optional function to call when package needs installation (package_name, install_command)
         """
         self.output_callback = output_callback
         self.finished_callback = finished_callback
+        self.install_callback = install_callback
         self.current_process: Optional[subprocess.Popen] = None
 
     def execute(self,
@@ -118,17 +191,55 @@ class ScriptExecutor:
             )
             self.current_process = process
 
+            # Accumulate stderr for error detection
+            stderr_output = []
+
             def read_stream(stream):
                 for line in iter(stream.readline, ""):
                     if line:
                         self.output_callback("  " + line)  # Indent output
                 stream.close()
 
+            def read_stderr(stream):
+                for line in iter(stream.readline, ""):
+                    if line:
+                        self.output_callback("  " + line)  # Indent output
+                        stderr_output.append(line)
+                stream.close()
+
             # Read streams
             read_stream(process.stdout)
-            read_stream(process.stderr)
+            read_stderr(process.stderr)
 
             process.wait()
+
+            # Check for missing packages if process failed
+            if process.returncode != 0 and stderr_output:
+                combined_error = "".join(stderr_output)
+                missing_package = detect_missing_package(combined_error)
+
+                if missing_package:
+                    # Get install command
+                    install_cmd = get_install_command(missing_package)
+
+                    # If we have an install callback, use it; otherwise show manual instructions
+                    if self.install_callback:
+                        # Trigger auto-install via callback
+                        # Pass a no-op callback for completion notification
+                        def on_install_complete():
+                            pass
+
+                        self.install_callback(missing_package, install_cmd, on_install_complete)
+                    else:
+                        # Manual installation fallback
+                        self.output_callback("\n" + "=" * 60)
+                        self.output_callback("❌ Missing Python Package")
+                        self.output_callback("=" * 60)
+                        self.output_callback(f"\nThe script requires the '{missing_package}' package.")
+                        self.output_callback(f"\n📦 To install it, run:")
+                        self.output_callback(f"\n   {install_cmd}")
+                        self.output_callback(f"\n🔄 Then relaunch the app to use the newly installed package.")
+                        self.output_callback("\n" + "=" * 60)
 
             # Call finished callback
             self.finished_callback(process.returncode, output_dir)

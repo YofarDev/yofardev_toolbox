@@ -12,4 +12,5 @@ dependencies = [
     "opencv-python>=4.9.0.80",
     "rembg>=2.0.68",
     "onnxruntime>=1.23.2",
+    "pymupdf>=1.26.7",
 ]

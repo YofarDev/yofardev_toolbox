@@ -249,13 +249,18 @@ class App(ctk.CTk):
         # Initialize executor
         self.executor = ScriptExecutor(
             output_callback=self.output_console.append_stream,
-            finished_callback=self._process_finished
+            finished_callback=self._process_finished,
+            install_callback=self.output_console.show_install_button
         )
 
     # --- Script Loading and Selection ---
 
     def load_script_details(self, script):
         """Load and display script details."""
+        # Exit generator mode if active
+        if self.showing_generator:
+            self._exit_generator()
+
         # Update sidebar highlighting
         self.sidebar.highlight_script(script["name"])
 
@@ -543,8 +548,7 @@ class App(ctk.CTk):
             self.main_frame,
             self.scripts,
             on_complete=self._on_generator_complete,
-            on_cancel=self._exit_generator,
-            on_log=self._log_to_console
+            on_cancel=self._exit_generator
         )
         self.generator_panel.pack(fill="both", expand=True)
 
