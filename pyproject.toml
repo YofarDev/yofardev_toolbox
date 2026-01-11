@@ -1,0 +1,15 @@
+[project]
+name = "yofardev-toolbox"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "customtkinter>=5.2.2",
+    "numpy>=1.26.4",
+    "pillow>=10.3.0",
+    "imageio>=2.34.1",
+    "opencv-python>=4.9.0.80",
+    "rembg>=2.0.68",
+    "onnxruntime>=1.23.2",
+]
