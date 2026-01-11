@@ -1,6 +1,6 @@
 # Yofardev Toolbox
 
-A modern, desktop automation application for image processing tasks. Built with Python and CustomTkinter, it provides a sleek dark-themed interface for running and generating image processing scripts.
+A modern, desktop automation application for batch file processing. Built with Python and CustomTkinter, it provides a sleek dark-themed interface with **AI-powered script generation** - simply describe what you want to automate, and the app writes the script for you.
 
 ![Python Version](https://img.shields.io/badge/python-3.13%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
