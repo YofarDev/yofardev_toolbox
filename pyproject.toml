@@ -13,4 +13,6 @@ dependencies = [
     "rembg>=2.0.68",
     "onnxruntime>=1.23.2",
     "pymupdf>=1.26.7",
+    "moviepy==1.0.3",
+    "pydub>=0.25.1",
 ]

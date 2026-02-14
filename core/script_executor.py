@@ -6,7 +6,65 @@ import sys
 import datetime
 import re
 import shutil
+import json
+from pathlib import Path
 from typing import List, Dict, Callable, Optional, Tuple
+
+
+def _get_project_dir() -> str:
+    """Get the project directory path."""
+    # Get the directory containing this file (core/script_executor.py)
+    # Then go up to the project root
+    return str(Path(__file__).parent.parent.resolve())
+
+
+def _get_uv_executable() -> str:
+    """Get the uv executable path."""
+    # Try to find uv in PATH
+    uv_path = shutil.which("uv")
+    if uv_path:
+        return uv_path
+    # Fallback to common locations
+    for path in ["/opt/homebrew/bin/uv", "/usr/local/bin/uv"]:
+        if os.path.exists(path):
+            return path
+    return "uv"  # Fallback to just "uv" and hope it's in PATH
+
+
+def is_package_installed(package_name: str) -> bool:
+    """
+    Check if a Python package is already installed in the project.
+
+    Args:
+        package_name: Name of the package to check (e.g., 'pydub', 'Pillow')
+
+    Returns:
+        True if package is installed, False otherwise
+    """
+    try:
+        uv = _get_uv_executable()
+        project_dir = _get_project_dir()
+        # Use uv pip list with --directory to target the project's virtual environment
+        result = subprocess.run(
+            [uv, "pip", "list", "--directory", project_dir, "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            installed_packages = json.loads(result.stdout)
+            installed_names = {pkg['name'].lower() for pkg in installed_packages}
+            return package_name.lower() in installed_names
+    except Exception:
+        pass
+
+    # Fallback: try to import the package
+    try:
+        import importlib
+        importlib.import_module(package_name)
+        return True
+    except ImportError:
+        return False
 
 
 def detect_missing_package(error_output: str) -> Optional[str]:
@@ -61,7 +119,7 @@ def get_install_command(package_name: str) -> str:
         package_name: Name of the missing package
 
     Returns:
-        Installation command string
+        Installation command string (e.g., "uv add pydub")
     """
     # Map common package names to their pip/uv install names
     mappings = {
@@ -74,7 +132,59 @@ def get_install_command(package_name: str) -> str:
     }
 
     install_name = mappings.get(package_name, package_name)
-    return f"uv add {install_name}"
+    uv = _get_uv_executable()
+    project_dir = _get_project_dir()
+    return f"{uv} add --directory {project_dir} {install_name}"
+
+
+def get_install_command_list(package_name: str) -> List[str]:
+    """
+    Get the installation command for a package as a list.
+
+    Args:
+        package_name: Name of the missing package
+
+    Returns:
+        Installation command as a list of arguments
+    """
+    # Map common package names to their pip/uv install names
+    mappings = {
+        'cv2': 'opencv-python',
+        'cv2.cv2': 'opencv-python-headless',
+        'PIL': 'Pillow',
+        'yaml': 'PyYAML',
+        'bs4': 'beautifulsoup4',
+        'fitz': 'pymupdf',  # PyMuPDF is installed as pymupdf, imported as fitz
+    }
+
+    install_name = mappings.get(package_name, package_name)
+    uv = _get_uv_executable()
+    project_dir = _get_project_dir()
+    return [uv, "add", "--directory", project_dir, install_name]
+
+
+def get_installed_packages() -> Dict[str, str]:
+    """
+    Get a dictionary of all installed packages and their versions in the project.
+
+    Returns:
+        Dict mapping package names (lowercase) to version strings
+    """
+    try:
+        uv = _get_uv_executable()
+        project_dir = _get_project_dir()
+        result = subprocess.run(
+            [uv, "pip", "list", "--directory", project_dir, "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+        if result.returncode == 0:
+            packages = json.loads(result.stdout)
+            return {pkg['name'].lower(): pkg['version'] for pkg in packages}
+    except Exception as e:
+        print(f"Error getting installed packages: {e}")
+    return {}
 
 
 class ScriptExecutor:

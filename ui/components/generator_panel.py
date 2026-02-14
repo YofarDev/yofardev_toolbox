@@ -6,7 +6,7 @@ import subprocess
 from config.themes import COLORS
 from config import get_config
 from core.llm_generator import ScriptGenerator, GenerationError, APIError, ValidationError
-from core.script_executor import get_install_command
+from core.script_executor import get_install_command, get_install_command_list, is_package_installed, get_installed_packages
 
 
 class GeneratorPanel(ctk.CTkFrame):
@@ -179,6 +179,19 @@ Examples:
             hover_color=COLORS["success_hover"]
         )
         self.generate_btn.pack(side="left")
+
+        # DEBUG: Temporary button to test pydub installation
+        self.debug_install_btn = ctk.CTkButton(
+            self.btn_frame,
+            text="🐛 DEBUG: Install pydub",
+            width=150,
+            font=ctk.CTkFont(size=11),
+            command=self._debug_install_pydub,
+            fg_color=COLORS["danger"],
+            hover_color="#8b0000",
+            text_color=COLORS["text_main"]
+        )
+        self.debug_install_btn.pack(side="left", padx=(10, 0))
 
     def _add_placeholder(self, textbox, placeholder_text):
         """
@@ -394,14 +407,24 @@ Examples:
         def run_install():
             success_count = 0
             failed_packages = []
+            skipped_count = 0
 
             for i, pkg in enumerate(external_packages, 1):
-                install_cmd = get_install_command(pkg)
+                install_cmd_display = get_install_command(pkg)
+                install_cmd_list = get_install_command_list(pkg)
+
+                # Check if already installed
+                if is_package_installed(pkg):
+                    self.log(f"\n   [{i}/{len(external_packages)}] ✓ {pkg} already installed - skipping")
+                    skipped_count += 1
+                    success_count += 1
+                    continue
+
                 self.log(f"\n   [{i}/{len(external_packages)}] Installing {pkg}...")
 
                 try:
                     result = subprocess.run(
-                        install_cmd.split(),
+                        install_cmd_list,
                         capture_output=True,
                         text=True,
                         timeout=120
@@ -424,7 +447,10 @@ Examples:
             # Show final result
             self.log(f"\n{'=' * 60}")
             if success_count == len(external_packages):
-                self.log(f"✅ All {success_count} packages installed successfully!")
+                if skipped_count > 0:
+                    self.log(f"✅ Ready! {skipped_count} already installed, {success_count - skipped_count} newly installed.")
+                else:
+                    self.log(f"✅ All {success_count} packages installed successfully!")
                 self.log(f"{'=' * 60}")
                 self.log(f"\n🔄 Please relaunch the app to use the new packages.")
                 self.log(f"   Your script '{script_filename}' will be ready to use.")
@@ -542,3 +568,119 @@ Examples:
                 text="Generate Script",
                 fg_color=COLORS["success"]
             ))
+
+    def _debug_install_pydub(self):
+        """DEBUG: Test pydub installation with detailed logging."""
+        self.log("=" * 70)
+        self.log("🐛 DEBUG: Starting pydub installation test")
+        self.log("=" * 70)
+
+        # Step 1: Check if pydub is already installed
+        self.log("\n[Step 1] Checking if 'pydub' is already installed...")
+        is_installed = is_package_installed("pydub")
+        self.log(f"   Result: {'✅ Already installed' if is_installed else '❌ Not installed'}")
+
+        # Step 2: Get list of all installed packages
+        self.log("\n[Step 2] Getting all installed packages...")
+        installed = get_installed_packages()
+        self.log(f"   Total packages installed: {len(installed)}")
+
+        # Show audio-related packages
+        audio_packages = {k: v for k, v in installed.items() if 'audio' in k or 'sound' in k or 'dub' in k}
+        if audio_packages:
+            self.log(f"   Audio-related packages found: {audio_packages}")
+        else:
+            self.log("   No audio-related packages found")
+
+        # Step 3: Get install command
+        self.log("\n[Step 3] Getting install command for 'pydub'...")
+        install_cmd_display = get_install_command("pydub")
+        install_cmd_list = get_install_command_list("pydub")
+        self.log(f"   Command: {install_cmd_display}")
+        self.log(f"   Command list: {install_cmd_list}")
+
+        # Step 4: Disable button
+        self.after(0, lambda: self.debug_install_btn.configure(
+            state="disabled",
+            text="⏳ Installing..."
+        ))
+
+        def run_install():
+            self.log("\n[Step 4] Running installation command...")
+            try:
+                # Show working directory
+                self.log(f"   Working directory: {os.getcwd()}")
+
+                # Show Python path
+                self.log(f"   Python executable: {os.sys.executable}")
+
+                # Run the command using the list (safer than split)
+                self.log(f"   Executing: {' '.join(install_cmd_list)}")
+                result = subprocess.run(
+                    install_cmd_list,
+                    capture_output=True,
+                    text=True,
+                    timeout=120
+                )
+
+                self.log(f"\n   Return code: {result.returncode}")
+
+                if result.stdout:
+                    self.log(f"\n   STDOUT:")
+                    for line in result.stdout.split('\n')[:20]:  # Limit output
+                        if line.strip():
+                            self.log(f"      {line}")
+
+                if result.stderr:
+                    self.log(f"\n   STDERR:")
+                    for line in result.stderr.split('\n')[:20]:  # Limit output
+                        if line.strip():
+                            self.log(f"      {line}")
+
+                if result.returncode == 0:
+                    self.log("\n✅ Installation successful!")
+
+                    # Verify installation
+                    self.log("\n[Step 5] Verifying installation...")
+                    is_now_installed = is_package_installed("pydub")
+                    self.log(f"   Verification: {'✅ Confirmed installed' if is_now_installed else '❌ Not found'}")
+
+                    # Show updated packages
+                    updated = get_installed_packages()
+                    if "pydub" in updated:
+                        self.log(f"   pydub version: {updated['pydub']}")
+
+                    self.after(0, lambda: self.debug_install_btn.configure(
+                        state="normal",
+                        text="✓ Success - Relaunch",
+                        fg_color=COLORS["success"]
+                    ))
+                else:
+                    self.log("\n❌ Installation failed!")
+                    self.after(0, lambda: self.debug_install_btn.configure(
+                        state="normal",
+                        text="❌ Failed - Retry"
+                    ))
+
+            except subprocess.TimeoutExpired:
+                self.log("\n❌ Installation timed out after 120 seconds")
+                self.after(0, lambda: self.debug_install_btn.configure(
+                    state="normal",
+                    text="❌ Timeout - Retry"
+                ))
+            except Exception as e:
+                self.log(f"\n❌ Exception during installation: {type(e).__name__}: {e}")
+                import traceback
+                self.log(f"   Traceback: {traceback.format_exc()}")
+                self.after(0, lambda: self.debug_install_btn.configure(
+                    state="normal",
+                    text="❌ Error - Retry"
+                ))
+
+            self.log("\n" + "=" * 70)
+            self.log("🐛 DEBUG: Installation test complete")
+            self.log("=" * 70)
+
+        # Run in background thread
+        thread = threading.Thread(target=run_install, daemon=True)
+        thread.start()

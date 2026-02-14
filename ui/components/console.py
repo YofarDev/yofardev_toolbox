@@ -4,7 +4,7 @@ import subprocess
 import threading
 import os
 from config.themes import COLORS
-from core.script_executor import get_install_command
+from core.script_executor import get_install_command, get_install_command_list
 
 
 class Console(ctk.CTkTextbox):
@@ -192,9 +192,10 @@ class Console(ctk.CTkTextbox):
 
         def run_install():
             try:
-                # Run uv add command
+                # Use the list version of the command (safer than split)
+                install_cmd_list = get_install_command_list(package_name)
                 result = subprocess.run(
-                    install_command.split(),
+                    install_cmd_list,
                     capture_output=True,
                     text=True,
                     timeout=120

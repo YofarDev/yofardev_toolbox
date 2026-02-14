@@ -21,6 +21,8 @@ from ui.components.sidebar import Sidebar
 from ui.components.console import Console
 from ui.components.generator_panel import GeneratorPanel
 from ui.dialogs.settings_dialog import SettingsDialog
+from ui.dialogs.script_editor_dialog import ScriptEditorDialog
+from core.script_version_manager import ScriptVersionManager
 
 
 class App(ctk.CTk):
@@ -39,6 +41,7 @@ class App(ctk.CTk):
 
         # --- State Variables ---
         self.script_manager = ScriptManager()
+        self.version_manager = ScriptVersionManager()
         self.scripts = self.script_manager.load_scripts()
         self.current_script = None
         self.parameter_widgets = {}
@@ -93,7 +96,22 @@ class App(ctk.CTk):
             justify="left",
             wraplength=800
         )
-        self.script_desc_label.pack(fill="x", pady=(5, 0))
+        self.script_desc_label.pack(fill="x", pady=(5, 10))
+
+        # Edit Script button
+        self.edit_script_btn = ctk.CTkButton(
+            self.header_frame,
+            text="⚙️ Edit Script",
+            width=120,
+            height=30,
+            font=ctk.CTkFont(size=12),
+            fg_color=COLORS["bg_root"],
+            hover_color="#000000",
+            text_color=COLORS["text_main"],
+            command=self.edit_script,
+            state="disabled"
+        )
+        self.edit_script_btn.pack(anchor="w")
 
         # 2. Configuration Container (Grid)
         self.config_container = ctk.CTkFrame(self.main_frame, fg_color="transparent")
@@ -269,6 +287,7 @@ class App(ctk.CTk):
         # Update Header
         self.script_title_label.configure(text=script["name"])
         self.script_desc_label.configure(text=script["description"])
+        self.edit_script_btn.configure(state="normal")
 
         # Button Config
         if not script.get("accepts_multiple_files", True):
@@ -381,13 +400,28 @@ class App(ctk.CTk):
             row = ctk.CTkFrame(self.file_list_scroll, fg_color=COLORS["bg_card"], height=35)
             row.pack(fill="x", pady=2)
 
+            # Use grid layout with proper column weights
+            row.grid_columnconfigure(1, weight=1)
+
+            # Icon (fixed width)
             icon = ctk.CTkLabel(row, text="📄", width=30, anchor="center")
-            icon.pack(side="left")
+            icon.grid(row=0, column=0, padx=(5, 0))
 
+            # Filename (expands, but truncates if too long)
             name = os.path.basename(file_path)
-            lbl = ctk.CTkLabel(row, text=name, anchor="w", font=ctk.CTkFont(size=12))
-            lbl.pack(side="left", padx=5, fill="x", expand=True)
+            # Truncate filename if too long (max 40 chars)
+            if len(name) > 40:
+                name = name[:37] + "..."
+            lbl = ctk.CTkLabel(
+                row,
+                text=name,
+                anchor="w",
+                font=ctk.CTkFont(size=12),
+                text_color=COLORS["text_main"]
+            )
+            lbl.grid(row=0, column=1, sticky="ew", padx=5, pady=5)
 
+            # Delete button (fixed width, always visible)
             del_btn = ctk.CTkButton(
                 row,
                 text="×",
@@ -399,7 +433,7 @@ class App(ctk.CTk):
                 font=("Arial", 16, "bold"),
                 command=lambda idx=i: self.remove_file(idx)
             )
-            del_btn.pack(side="right", padx=5, pady=5)
+            del_btn.grid(row=0, column=2, padx=(0, 5), pady=5)
 
     def remove_file(self, index):
         """Remove a file from the list."""
@@ -417,7 +451,8 @@ class App(ctk.CTk):
         if not self.current_script:
             return
         filetypes = self._get_filetypes()
-        file = filedialog.askopenfilename(filetypes=filetypes)
+        downloads_dir = os.path.expanduser("~/Downloads")
+        file = filedialog.askopenfilename(filetypes=filetypes, initialdir=downloads_dir)
         if file:
             self.selected_files = [file]
             self.update_file_list_ui()
@@ -427,7 +462,8 @@ class App(ctk.CTk):
         if not self.current_script:
             return
         filetypes = self._get_filetypes()
-        files = filedialog.askopenfilenames(filetypes=filetypes)
+        downloads_dir = os.path.expanduser("~/Downloads")
+        files = filedialog.askopenfilenames(filetypes=filetypes, initialdir=downloads_dir)
         if files:
             for file in files:
                 if file not in self.selected_files:
@@ -451,7 +487,8 @@ class App(ctk.CTk):
         """Add all files from a folder."""
         if not self.current_script:
             return
-        folder = filedialog.askdirectory()
+        downloads_dir = os.path.expanduser("~/Downloads")
+        folder = filedialog.askdirectory(initialdir=downloads_dir)
         if not folder:
             return
 
@@ -575,6 +612,47 @@ class App(ctk.CTk):
     def show_settings_modal(self):
         """Show settings modal for LLM configuration."""
         SettingsDialog(self)
+
+    def edit_script(self):
+        """Open script editor dialog for current script."""
+        if not self.current_script:
+            return
+
+        # Get script path
+        script_filename = self.current_script["filename"]
+        script_path = os.path.join("scripts", f"{script_filename}.py")
+
+        # Check if script exists
+        if not os.path.exists(script_path):
+            self.output_console.append_stream(f"Error: Script file not found at {script_path}\n")
+            return
+
+        # Open editor dialog
+        ScriptEditorDialog(
+            self,
+            self.current_script,
+            script_path,
+            on_save=self._on_script_edited,
+            version_manager=self.version_manager
+        )
+
+    def _on_script_edited(self):
+        """Called when script is saved from editor."""
+        # Reload scripts to pick up changes
+        self.scripts = self.script_manager.refresh()
+
+        # Reload current script details to show any metadata changes
+        if self.current_script:
+            updated_script = self.script_manager.get_script_by_filename(
+                self.current_script["filename"]
+            )
+            if updated_script:
+                self.load_script_details(updated_script)
+
+        # Refresh sidebar
+        self.sidebar.refresh_scripts(self.scripts)
+
+        self.output_console.append_stream("✓ Script edited and reloaded\n")
 
     def _log_to_console(self, message):
         """Log a message to the console."""
